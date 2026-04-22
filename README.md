@@ -1,111 +1,181 @@
-# AI Day Planner with Priority Levels
+"""AI Day Planner with priority levels."""
 
-**Name:** [Add your full name here]  
-**UMID:** chengkj
+cl import from .frontend { app as ClientApp }
 
-## Project Overview
+cl def:pub app() -> JsxElement {
+    return <ClientApp />;
+}
 
-This project is based on the official Jac **Build Your First App** tutorial flow. It includes:
+import from byllm.lib { Model }
+import from uuid { uuid4 }
 
-- todo CRUD
-- AI-based todo categorization
-- user authentication
-- AI-generated meal shopping lists
-- a clean multi-file project structure
+glob llm = Model(model_name="claude-sonnet-4-20250514");
 
-## Custom Feature Added
+enum Category { WORK, PERSONAL, SHOPPING, HEALTH, OTHER }
+enum Unit { PIECE, LB, OZ, CUP, TBSP, TSP, CLOVE, BUNCH, CAN, PACK }
 
-I added **priority levels** for todo items.
+obj Ingredient {
+    has name: str;
+    has quantity: float;
+    has unit: Unit;
+    has cost: float;
+    has carby: bool;
+}
 
-Each todo can now be assigned one of three priority levels:
+sem Ingredient.cost = "Estimated cost in USD";
+sem Ingredient.carby = "True if this ingredient is high in carbohydrates";
 
-- high
-- medium
-- low
+def categorize(title: str) -> Category by llm();
+sem categorize = "Categorize a todo item based on its title";
 
-The app stores the priority on each todo, shows a visible priority badge, and renders todos in priority order.
+def generate_ingredients(meal_description: str) -> list[Ingredient] by llm();
+sem generate_ingredients = "Generate a grocery list for a meal description";
 
-## Where the Feature Is Implemented
+node Todo {
+    has id: str = str(uuid4()),
+        title: str,
+        done: bool = False,
+        category: str = "other",
+        priority: str = "medium";
+}
 
-- `main.jac`
-  - Added the `priority` field to the `Todo` node
-  - Updated the `AddTodo` walker to save the selected priority
-- `frontend.cl.jac`
-  - Added a priority dropdown when creating a todo
-  - Added priority badges in the UI
-  - Added priority-based ordering of the todo list
-- `styles.css`
-  - Added badge styles for high / medium / low priority
+node MealIngredient {
+    has id: str = str(uuid4()),
+        name: str,
+        quantity: float,
+        unit: str,
+        cost: float,
+        carby: bool;
+}
 
-## Project Files
+walker:priv AddTodo {
+    has title: str;
+    has priority: str = "medium";
 
-- `main.jac` - server logic, AI functions, walkers
-- `frontend.cl.jac` - client UI and app logic
-- `frontend.impl.jac` - placeholder extra file for clean multi-file structure
-- `styles.css` - app styles
-- `jac.toml` - Jac project config
-- `.env.example` - example API key file
+    can create with Root entry {
+        category = str(categorize(self.title)).split(".")[-1].lower();
+        priority_value = self.priority.lower().strip();
 
-## How to Run
+        if priority_value != "high" and priority_value != "medium" and priority_value != "low" {
+            priority_value = "medium";
+        }
 
-### 1. Create a virtual environment
+        new_todo = here ++> Todo(
+            title=self.title,
+            category=category,
+            priority=priority_value
+        );
+        report new_todo[0];
+    }
+}
 
-```bash
-python -m venv jac-env
-```
+walker:priv ListTodos {
+    has results: list = [];
 
-Activate it:
+    can start with Root entry {
+        visit [-->];
+    }
 
-**Windows**
-```bash
-jac-env\Scripts\activate
-```
+    can collect with Todo entry {
+        self.results.append(here);
+    }
 
-**macOS / Linux**
-```bash
-source jac-env/bin/activate
-```
+    can done with Root exit {
+        report self.results;
+    }
+}
 
-### 2. Install Jac
+walker:priv ToggleTodo {
+    has todo_id: str;
 
-```bash
-pip install jaseci
-jac --version
-```
+    can search with Root entry {
+        visit [-->];
+    }
 
-### 3. Set your Anthropic API key
+    can toggle with Todo entry {
+        if here.id == self.todo_id {
+            here.done = not here.done;
+            report here;
+            disengage;
+        }
+    }
+}
 
-**Windows (Command Prompt)**
-```bash
-set ANTHROPIC_API_KEY=your-key-here
-```
+walker:priv DeleteTodo {
+    has todo_id: str;
 
-**PowerShell**
-```bash
-$env:ANTHROPIC_API_KEY="your-key-here"
-```
+    can search with Root entry {
+        visit [-->];
+    }
 
-**macOS / Linux**
-```bash
-export ANTHROPIC_API_KEY="your-key-here"
-```
+    can delete with Todo entry {
+        if here.id == self.todo_id {
+            removed_id = here.id;
+            del here;
+            report {"deleted": removed_id};
+            disengage;
+        }
+    }
+}
 
-### 4. Start the app
+walker:priv GenerateShoppingList {
+    has meal_description: str;
 
-```bash
-jac start --dev
-```
+    can generate with Root entry {
+        visit [-->];
 
-### 5. Open in browser
+        ingredients = generate_ingredients(self.meal_description);
+        result: list = [];
 
-Go to:
+        for ing in ingredients {
+            unit_value = str(ing.unit).split(".")[-1].lower();
+            new_item = here ++> MealIngredient(
+                name=ing.name,
+                quantity=ing.quantity,
+                unit=unit_value,
+                cost=ing.cost,
+                carby=ing.carby
+            );
+            result.append(new_item[0]);
+        }
 
-```text
-http://localhost:8000/cl/app
-```
+        report result;
+    }
 
-## Notes
+    can clear_old with MealIngredient entry {
+        del here;
+    }
+}
 
-- The tutorial uses Jac's `by llm()` integration for AI features.
-- The app uses authenticated private walkers for per-user todo isolation.
-- Before submitting, replace the name placeholder at the top of this README.
+walker:priv GetShoppingList {
+    has items: list = [];
+
+    can start with Root entry {
+        visit [-->];
+    }
+
+    can collect with MealIngredient entry {
+        self.items.append(here);
+    }
+
+    can done with Root exit {
+        report self.items;
+    }
+}
+
+walker:priv ClearShoppingList {
+    has removed_any: bool = False;
+
+    can start with Root entry {
+        visit [-->];
+    }
+
+    can clear with MealIngredient entry {
+        self.removed_any = True;
+        del here;
+    }
+
+    can done with Root exit {
+        report {"cleared": self.removed_any};
+    }
+}

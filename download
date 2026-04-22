@@ -1,8 +1,1 @@
-.jac/
-__pycache__/
-*.pyc
-.env
-node_modules/
-venv/
-.venv/
-jac-env/
+ANTHROPIC_API_KEY=your-key-here
