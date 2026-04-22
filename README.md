@@ -1,56 +1,50 @@
 # AI Day Planner with Priority Levels
 
+**Name:** [Add your full name here]  
 **UMID:** chengkj
 
 ## Project Overview
 
-This project is based on the official Jac **Build an AI Day Planner** tutorial and includes the full application flow:
+This project is based on the official Jac **Build Your First App** tutorial flow. It includes:
 
-- task CRUD
-- AI-powered task categorization
+- todo CRUD
+- AI-based todo categorization
+- user authentication
 - AI-generated meal shopping lists
-- authentication / per-user data isolation
-- walker-based backend logic
+- a clean multi-file project structure
 
-I also added one custom feature for the assignment:
+## Custom Feature Added
 
-## Custom Feature: Priority Levels
+I added **priority levels** for todo items.
 
-Each task now has a **priority level**:
+Each todo can now be assigned one of three priority levels:
 
-- `high`
-- `medium`
-- `low`
+- high
+- medium
+- low
 
-Users can choose a priority when creating a task. The app then:
+The app stores the priority on each todo, shows a visible priority badge, and renders todos in priority order.
 
-- stores that priority on the `Task` node
-- shows a visual priority badge for each task
-- displays tasks in priority order (`high -> medium -> low`)
-
-This makes the task list more useful for actual day planning instead of treating every task the same.
-
-## Files
+## Where the Feature Is Implemented
 
 - `main.jac`
-  - task and shopping list nodes
-  - AI categorization and shopping list generation
-  - walker-based task and shopping list operations
-  - priority field added to `Task`
+  - Added the `priority` field to the `Todo` node
+  - Updated the `AddTodo` walker to save the selected priority
 - `frontend.cl.jac`
-  - UI, app state, auth screen, task input, meal planner UI
-  - priority dropdown and priority badges
-  - priority-based ordering in the task list
-- `frontend.impl.jac`
-  - method implementations that spawn walkers
-  - passes selected priority into `AddTask`
+  - Added a priority dropdown when creating a todo
+  - Added priority badges in the UI
+  - Added priority-based ordering of the todo list
 - `styles.css`
-  - application styling
-  - added badge styles for high / medium / low priority
-- `jac.toml`
-  - project configuration
-- `.env.example`
-  - example environment variable file for Anthropic
+  - Added badge styles for high / medium / low priority
+
+## Project Files
+
+- `main.jac` - server logic, AI functions, walkers
+- `frontend.cl.jac` - client UI and app logic
+- `frontend.impl.jac` - placeholder extra file for clean multi-file structure
+- `styles.css` - app styles
+- `jac.toml` - Jac project config
+- `.env.example` - example API key file
 
 ## How to Run
 
@@ -112,19 +106,6 @@ http://localhost:8000/cl/app
 
 ## Notes
 
-- This project follows the official Jac tutorial structure and then extends it with a custom feature.
-- Authentication is handled with the built-in Jac runtime helpers in the frontend.
-- Walkers are used for task and shopping list operations in the final version.
-- If you upgrade Jac packages and run into weird cache issues, try:
-
-```bash
-jac purge
-```
-
-## Suggested Submission URL
-
-Use this public GitHub repository URL for Canvas submission:
-
-```text
-https://github.com/chengkj798/Jaseci
-```
+- The tutorial uses Jac's `by llm()` integration for AI features.
+- The app uses authenticated private walkers for per-user todo isolation.
+- Before submitting, replace the name placeholder at the top of this README.

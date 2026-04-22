@@ -1,25 +1,18 @@
-"""AI Day Planner -- walker-based version with priority levels."""
+"""AI Day Planner with priority levels."""
 
-cl {
-    import from frontend { app as ClientApp }
+cl import from .frontend { app as ClientApp }
 
-    def:pub app -> JsxElement {
-        return
-            <ClientApp />;
-    }
+cl def:pub app() -> JsxElement {
+    return <ClientApp />;
 }
 
 import from byllm.lib { Model }
+import from uuid { uuid4 }
 
 glob llm = Model(model_name="claude-sonnet-4-20250514");
 
-# --- Enums ---
-
-enum Category { WORK, PERSONAL, SHOPPING, HEALTH, FITNESS, OTHER }
-
-enum Unit { PIECE, LB, OZ, CUP, TBSP, TSP, BUNCH }
-
-# --- AI Types ---
+enum Category { WORK, PERSONAL, SHOPPING, HEALTH, OTHER }
+enum Unit { PIECE, LB, OZ, CUP, TBSP, TSP, CLOVE, BUNCH, CAN, PACK }
 
 obj Ingredient {
     has name: str;
@@ -33,59 +26,57 @@ sem Ingredient.cost = "Estimated cost in USD";
 sem Ingredient.carby = "True if this ingredient is high in carbohydrates";
 
 def categorize(title: str) -> Category by llm();
-sem categorize = "Categorize a task based on its title";
+sem categorize = "Categorize a todo item based on its title";
 
-def generate_shopping_list(meal_description: str) -> list[Ingredient] by llm();
-sem generate_shopping_list = "Generate a shopping list of ingredients needed for a described meal";
+def generate_ingredients(meal_description: str) -> list[Ingredient] by llm();
+sem generate_ingredients = "Generate a grocery list for a meal description";
 
-# --- Data Nodes ---
-
-node Task {
-    has title: str,
+node Todo {
+    has id: str = str(uuid4()),
+        title: str,
         done: bool = False,
         category: str = "other",
         priority: str = "medium";
 }
 
-node ShoppingItem {
-    has name: str,
+node MealIngredient {
+    has id: str = str(uuid4()),
+        name: str,
         quantity: float,
         unit: str,
         cost: float,
         carby: bool;
 }
 
-# --- Task Walkers ---
-
-walker:priv AddTask {
+walker:priv AddTodo {
     has title: str;
     has priority: str = "medium";
 
     can create with Root entry {
         category = str(categorize(self.title)).split(".")[-1].lower();
+        priority_value = self.priority.lower().strip();
 
-        priority_value = self.priority.lower();
         if priority_value != "high" and priority_value != "medium" and priority_value != "low" {
             priority_value = "medium";
         }
 
-        new_task = here ++> Task(
+        new_todo = here ++> Todo(
             title=self.title,
             category=category,
             priority=priority_value
         );
-        report new_task[0];
+        report new_todo[0];
     }
 }
 
-walker:priv ListTasks {
+walker:priv ListTodos {
     has results: list = [];
 
     can start with Root entry {
         visit [-->];
     }
 
-    can collect with Task entry {
+    can collect with Todo entry {
         self.results.append(here);
     }
 
@@ -94,15 +85,15 @@ walker:priv ListTasks {
     }
 }
 
-walker:priv ToggleTask {
-    has task_id: str;
+walker:priv ToggleTodo {
+    has todo_id: str;
 
     can search with Root entry {
         visit [-->];
     }
 
-    can toggle with Task entry {
-        if jid(here) == self.task_id {
+    can toggle with Todo entry {
+        if here.id == self.todo_id {
             here.done = not here.done;
             report here;
             disengage;
@@ -110,45 +101,48 @@ walker:priv ToggleTask {
     }
 }
 
-walker:priv DeleteTask {
-    has task_id: str;
+walker:priv DeleteTodo {
+    has todo_id: str;
 
     can search with Root entry {
         visit [-->];
     }
 
-    can remove with Task entry {
-        if jid(here) == self.task_id {
+    can delete with Todo entry {
+        if here.id == self.todo_id {
+            removed_id = here.id;
             del here;
-            report {"deleted": self.task_id};
+            report {"deleted": removed_id};
             disengage;
         }
     }
 }
-
-# --- Shopping List Walkers ---
 
 walker:priv GenerateShoppingList {
     has meal_description: str;
 
     can generate with Root entry {
         visit [-->];
-        ingredients = generate_shopping_list(self.meal_description);
+
+        ingredients = generate_ingredients(self.meal_description);
+        result: list = [];
 
         for ing in ingredients {
-            here ++> ShoppingItem(
+            unit_value = str(ing.unit).split(".")[-1].lower();
+            new_item = here ++> MealIngredient(
                 name=ing.name,
                 quantity=ing.quantity,
-                unit=str(ing.unit).split(".")[-1].lower(),
+                unit=unit_value,
                 cost=ing.cost,
                 carby=ing.carby
             );
+            result.append(new_item[0]);
         }
 
-        report [here-->][?:ShoppingItem];
+        report result;
     }
 
-    can clear_old with ShoppingItem entry {
+    can clear_old with MealIngredient entry {
         del here;
     }
 }
@@ -156,11 +150,11 @@ walker:priv GenerateShoppingList {
 walker:priv GetShoppingList {
     has items: list = [];
 
-    can collect with Root entry {
+    can start with Root entry {
         visit [-->];
     }
 
-    can gather with ShoppingItem entry {
+    can collect with MealIngredient entry {
         self.items.append(here);
     }
 
@@ -170,12 +164,18 @@ walker:priv GetShoppingList {
 }
 
 walker:priv ClearShoppingList {
-    can collect with Root entry {
+    has removed_any: bool = False;
+
+    can start with Root entry {
         visit [-->];
     }
 
-    can clear with ShoppingItem entry {
+    can clear with MealIngredient entry {
+        self.removed_any = True;
         del here;
-        report {"cleared": True};
+    }
+
+    can done with Root exit {
+        report {"cleared": self.removed_any};
     }
 }
